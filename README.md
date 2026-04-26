@@ -176,6 +176,33 @@ Notes:
 
 ---
 
+## Build macOS Package From Windows (GitHub Actions)
+
+If you are on Windows, you can still publish macOS builds by using GitHub-hosted macOS runners.
+
+This repository now includes a workflow at:
+
+- `.github/workflows/release-builds.yml`
+
+What it does on version tags (for example `v1.2.0`):
+
+- Builds and attaches `InstaDownloader.exe` (Windows)
+- Builds and attaches `InstaDownloader-macOS.pkg` (macOS installer)
+- Builds and attaches `InstaDownloader-macOS.app.zip` (macOS app bundle)
+
+Create a new release tag:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+Then open the **Actions** tab to monitor the workflow run. Release assets are attached automatically to that tag's GitHub Release.
+
+> macOS note: the package is unsigned by default. For frictionless install on user machines, add Apple code signing and notarization in a later step.
+
+---
+
 ## Output Structure
 
 Downloads are saved to your `Downloads` folder by default:
