@@ -25,6 +25,17 @@ Download reels and images from any public Instagram profile — no API key, no l
 
 ## Installation
 
+### Option A — Single file (simplest)
+
+Just download `insta_downloader.py` and install the two runtime dependencies:
+
+```bash
+pip install browser-cookie3 requests
+python insta_downloader.py
+```
+
+### Option B — Clone the full repository
+
 **Step 1 — Clone the repository**
 
 ```bash
@@ -49,6 +60,11 @@ source .venv/bin/activate
 ```bash
 pip install -r requirements.txt
 ```
+
+> For running tests, also install dev dependencies:
+> ```bash
+> pip install -r requirements-dev.txt
+> ```
 
 ---
 
@@ -165,6 +181,7 @@ No passwords are stored or entered. The script reads the Instagram session cooki
 ## Run Tests
 
 ```bash
+pip install -r requirements-dev.txt
 pytest -q
 ```
 
