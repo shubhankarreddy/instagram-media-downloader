@@ -132,6 +132,50 @@ python insta_downloader.py some_username --media-type reels --no-pause
 
 ---
 
+## Desktop App (GUI)
+
+Run the desktop app:
+
+```bash
+python gui_app.py
+```
+
+The GUI supports:
+
+- Username or profile URL input
+- Reels or images selection
+- Optional start/end date filtering
+- Optional download limit
+- Custom output folder selection
+- Live download logs in the app window
+
+---
+
+## Build Windows .exe
+
+Install build tools:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Create the executable:
+
+```bash
+pyinstaller --onefile --windowed --name InstaDownloader gui_app.py
+```
+
+Output location:
+
+- `dist/InstaDownloader.exe`
+
+Notes:
+
+- Run the `.exe` on a machine where Firefox, Chrome, or Edge is logged into Instagram.
+- If SmartScreen shows a warning, click **More info** and run anyway (common for unsigned local builds).
+
+---
+
 ## Output Structure
 
 Downloads are saved to your `Downloads` folder by default:
