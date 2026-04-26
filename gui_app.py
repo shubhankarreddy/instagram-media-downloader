@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import os
+import subprocess
 import threading
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
@@ -46,6 +48,7 @@ class InstaDownloaderApp:
         self.limit_var = tk.StringVar()
         self.output_dir_var = tk.StringVar(value=str(default_output_dir()))
         self.status_var = tk.StringVar(value="Ready")
+        self.last_download_folder: Path | None = None
 
         self._build_ui()
         self.worker_thread: threading.Thread | None = None
@@ -101,6 +104,9 @@ class InstaDownloaderApp:
         self.start_button = ttk.Button(controls, text="Start Download", command=self._start_download)
         self.start_button.pack(side=tk.LEFT)
 
+        self.open_folder_button = ttk.Button(controls, text="Open Folder", command=self._open_download_folder)
+        self.open_folder_button.pack(side=tk.LEFT, padx=(8, 0))
+
         self.clear_button = ttk.Button(controls, text="Clear Log", command=self._clear_log)
         self.clear_button.pack(side=tk.LEFT, padx=(8, 0))
 
@@ -134,10 +140,32 @@ class InstaDownloaderApp:
     def _set_running_state(self, running: bool) -> None:
         if running:
             self.start_button.configure(state=tk.DISABLED)
+            self.open_folder_button.configure(state=tk.DISABLED)
             self.status_var.set("Downloading...")
         else:
             self.start_button.configure(state=tk.NORMAL)
+            self.open_folder_button.configure(state=tk.NORMAL)
             self.status_var.set("Ready")
+
+    def _open_download_folder(self) -> None:
+        target = self.last_download_folder
+        if not target:
+            target = Path(self.output_dir_var.get().strip() or str(default_output_dir())).expanduser()
+
+        if not target.exists():
+            messagebox.showerror("Folder not found", f"This folder does not exist:\n{target}")
+            return
+
+        try:
+            if os.name == "nt":
+                os.startfile(str(target))
+            elif os.name == "posix":
+                if subprocess.call(["open", str(target)]) != 0:
+                    subprocess.Popen(["xdg-open", str(target)])
+            else:
+                raise OSError("Unsupported operating system.")
+        except Exception as error:
+            messagebox.showerror("Open folder failed", str(error))
 
     def _start_download(self) -> None:
         if self.worker_thread and self.worker_thread.is_alive():
@@ -211,6 +239,7 @@ class InstaDownloaderApp:
         writer = QueueWriter(self._safe_log)
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
+                profile_folder = output_dir / profile
                 if media_type == "images":
                     download_images(
                         profile,
@@ -229,6 +258,7 @@ class InstaDownloaderApp:
                         end_date=end_date,
                         source_was_url=source_was_url,
                     )
+                self.last_download_folder = profile_folder
                 print("Task completed.")
         except SystemExit as error:
             self._safe_log(f"\nError: {error}\n")
