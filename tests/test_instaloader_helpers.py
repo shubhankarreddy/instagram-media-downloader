@@ -116,6 +116,25 @@ def test_is_within_date_range_handles_boundaries() -> None:
     assert not MODULE.is_within_date_range(after_ts, start, end)
 
 
+def test_is_within_date_range_accepts_millisecond_timestamp() -> None:
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    end = MODULE.normalize_end_of_day(datetime(2026, 1, 31, tzinfo=timezone.utc))
+    inside_ms = int(datetime(2026, 1, 15, tzinfo=timezone.utc).timestamp() * 1000)
+
+    assert MODULE.is_within_date_range(inside_ms, start, end)
+
+
+def test_is_within_date_range_rejects_unknown_timestamp_when_filter_enabled() -> None:
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    end = MODULE.normalize_end_of_day(datetime(2026, 1, 31, tzinfo=timezone.utc))
+
+    assert not MODULE.is_within_date_range(None, start, end)
+
+
+def test_is_within_date_range_accepts_unknown_timestamp_without_filter() -> None:
+    assert MODULE.is_within_date_range(None, None, None)
+
+
 def test_request_json_success_path() -> None:
     session = _FakeSession(response=_FakeResponse(200, "ok", payload={"a": 1}))
     result = MODULE.request_json(
@@ -224,3 +243,35 @@ def test_iter_reel_urls_uses_highest_quality(monkeypatch: pytest.MonkeyPatch) ->
 
     urls = list(MODULE.iter_reel_video_urls(_Session(), "456"))
     assert urls == [("REEL001", "https://cdn.example/high.mp4", 1700000001)]
+
+
+def test_iter_reel_urls_uses_fallback_caption_timestamp(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "items": [
+            {
+                "media": {
+                    "product_type": "clips",
+                    "code": "REEL002",
+                    "caption": {"created_at_utc": 1700000100},
+                    "video_versions": [
+                        {"url": "https://cdn.example/high2.mp4", "width": 1280, "height": 720},
+                    ],
+                }
+            }
+        ],
+        "paging_info": {"more_available": False},
+    }
+
+    monkeypatch.setattr(MODULE, "request_json", lambda *args, **kwargs: payload)
+
+    class _Cookies(dict):
+        def get(self, key: str, default: str = "") -> str:
+            return super().get(key, default)
+
+    class _Session:
+        def __init__(self) -> None:
+            self.cookies = _Cookies()
+            self.headers: dict[str, str] = {}
+
+    urls = list(MODULE.iter_reel_video_urls(_Session(), "456"))
+    assert urls == [("REEL002", "https://cdn.example/high2.mp4", 1700000100)]

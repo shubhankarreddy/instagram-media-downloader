@@ -217,6 +217,49 @@ def normalize_end_of_day(end_date: datetime | None) -> datetime | None:
     return end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
 
 
+def normalize_timestamp_to_datetime(timestamp: object) -> datetime | None:
+    if timestamp is None:
+        return None
+
+    raw_value: object = timestamp
+    if isinstance(raw_value, str):
+        raw_value = raw_value.strip()
+        if not raw_value:
+            return None
+
+    try:
+        ts_int = int(float(raw_value))
+    except (TypeError, ValueError):
+        return None
+
+    abs_ts = abs(ts_int)
+    if abs_ts > 10**14:
+        ts_int //= 1_000_000
+    elif abs_ts > 10**11:
+        ts_int //= 1_000
+
+    try:
+        return datetime.fromtimestamp(ts_int, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def pick_media_timestamp(media: dict, fallback: object = None) -> object:
+    for key in ("taken_at", "taken_at_ts", "device_timestamp", "original_timestamp"):
+        value = media.get(key)
+        if value not in (None, ""):
+            return value
+
+    caption = media.get("caption")
+    if isinstance(caption, dict):
+        for key in ("created_at_utc", "created_at"):
+            value = caption.get(key)
+            if value not in (None, ""):
+                return value
+
+    return fallback
+
+
 def setup_profile_dirs(profile: str, output_dir: Path, media_type: str) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     profile_dir = output_dir / profile
@@ -290,7 +333,7 @@ def iter_reel_video_urls(session: requests.Session, user_id: str):
             if video_versions:
                 video_url = pick_highest_quality(video_versions)
                 media_code = media.get("code") or media.get("id") or media.get("pk")
-                taken_at = media.get("taken_at")
+                taken_at = pick_media_timestamp(media)
                 if video_url and media_code:
                     yield str(media_code), video_url, taken_at
 
@@ -301,7 +344,7 @@ def iter_reel_video_urls(session: requests.Session, user_id: str):
                     continue
                 carousel_video_url = pick_highest_quality(carousel_video_versions)
                 if carousel_video_url:
-                    carousel_taken_at = carousel.get("taken_at") or media.get("taken_at")
+                    carousel_taken_at = pick_media_timestamp(carousel, fallback=taken_at)
                     yield str(carousel_code), carousel_video_url, carousel_taken_at
 
         if not more_available:
@@ -340,7 +383,7 @@ def iter_image_urls(session: requests.Session, user_id: str):
             if str(media.get("product_type", "")).lower() in {"clips", "reels"}:
                 continue
 
-            taken_at = media.get("taken_at")
+            taken_at = pick_media_timestamp(media)
 
             image_versions = (media.get("image_versions2") or {}).get("candidates") or []
             if image_versions:
@@ -355,7 +398,7 @@ def iter_image_urls(session: requests.Session, user_id: str):
                     continue
                 image_url = pick_highest_quality(carousel_images)
                 carousel_code = carousel.get("code") or carousel.get("id") or carousel.get("pk")
-                carousel_taken_at = carousel.get("taken_at") or taken_at
+                carousel_taken_at = pick_media_timestamp(carousel, fallback=taken_at)
                 if image_url and carousel_code:
                     yield str(carousel_code), image_url, carousel_taken_at
 
@@ -381,13 +424,11 @@ def download_file(session: requests.Session, url: str, output_path: Path) -> Non
 
 
 def format_taken_at(value: object) -> str:
-    try:
-        timestamp = int(value)
-    except (TypeError, ValueError):
+    timestamp_dt = normalize_timestamp_to_datetime(value)
+    if not timestamp_dt:
         return "unknown_date"
 
-    dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-    return dt.strftime("%Y%m%d_%H%M%S")
+    return timestamp_dt.strftime("%Y%m%d_%H%M%S")
 
 
 def parse_date(date_str: str | None) -> datetime | None:
@@ -404,16 +445,13 @@ def is_within_date_range(
     start_date: datetime | None,
     end_datetime: datetime | None,
 ) -> bool:
-    try:
-        ts_int = int(timestamp)
-    except (TypeError, ValueError):
-        return True
-    
-    reel_date = datetime.fromtimestamp(ts_int, tz=timezone.utc)
-    
-    if start_date and reel_date < start_date:
+    media_date = normalize_timestamp_to_datetime(timestamp)
+    if not media_date:
+        return start_date is None and end_datetime is None
+
+    if start_date and media_date < start_date:
         return False
-    if end_datetime and reel_date > end_datetime:
+    if end_datetime and media_date > end_datetime:
         return False
 
     return True
